@@ -38,4 +38,16 @@ Roadmap :
 - Change the 404 webpage
 - Modify the Headers
 - Change RID for something else
-- 
+Source :
+## Simple use of Gophish
+https://medium.com/@a.izraeli/phishing-with-gophish-a-z-story-53e25d49a01
+
+## Red Team with Gophish
+https://payatu.com/blog/phishing-infrastructure-setup/
+https://github.com/fin3ss3g0d/evilgophish
+
+
+
+## Changement a faire
+https://www.sprocketsecurity.com/resources/never-had-a-bad-day-phishing-how-to-set-up-gophish-to-evade-security-controls
+
