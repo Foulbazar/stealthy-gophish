@@ -32,22 +32,16 @@ Documentation can be found on our [site](http://getgophish.com/documentation). F
 
 ### Little change for more stealthyness
 
-Roadmap :
+Done :
 - Remove or rename IOCs
 - Change the server name
 - Change the 404 webpage
 - Modify the Headers
-- Change RID for something else
-Source :
-## Simple use of Gophish
-https://medium.com/@a.izraeli/phishing-with-gophish-a-z-story-53e25d49a01
+- Change RID for something else (here randomly generated)
 
 ## Red Team with Gophish
-https://payatu.com/blog/phishing-infrastructure-setup/
 https://github.com/fin3ss3g0d/evilgophish
 
-
-
-## Changement a faire
+## Source for changes
 https://www.sprocketsecurity.com/resources/never-had-a-bad-day-phishing-how-to-set-up-gophish-to-evade-security-controls
 
