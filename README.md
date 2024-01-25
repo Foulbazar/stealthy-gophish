@@ -45,3 +45,5 @@ https://github.com/fin3ss3g0d/evilgophish
 ## Source for changes
 https://www.sprocketsecurity.com/resources/never-had-a-bad-day-phishing-how-to-set-up-gophish-to-evade-security-controls
 
+## Idnetify Gophish Infrastructure
+https://cybercx.co.nz/blog/identifying-gophish-servers/
