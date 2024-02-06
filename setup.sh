@@ -6,14 +6,16 @@
 # ./gophish_image_setup.sh phisher.com,www.phisher.com
 
 # Check if the correct number of arguments are provided
-if [ "$#" -lt 2 ]; then
+if [ "$#" -lt 2 ] 
+then
     echo "Usage: $0 {setup|update} [domain_name] [ip|new_domain]"
     echo "       $0 setup <domain_name> <ip|new_domain>"
     echo "       $0 update <old_domain> <new_domain>"
     exit 1
 fi
 # Set variables based on the first argument
-if [ "$1" = "setup" ]; then
+if [ "$1" = "setup" ]
+then
     MODE="setup"
     domain_name="$2"
     IP="$3"
@@ -33,7 +35,7 @@ if [ "$1" = "setup" ]; then
     sudo ufw allow from $IP to any port 3333
     sudo ufw allow 443
     sudo ufw allow 80
-    sudo ufw enable
+    
 
     # Install go
     VERSION=$(curl -s https://go.dev/dl/?mode=json | jq -r '.[0].version')
@@ -182,7 +184,8 @@ if [ "$1" = "setup" ]; then
     # Restart the services 
     sudo systemctl restart gophish.service
     sudo /usr/sbin/postmap /etc/postfix/generic 
-    sudo service postfix restart 
+    sudo service postfix restart
+    sudo ufw enable
 
 elif [ "$1" = "update" ]; then
     MODE="update"
@@ -265,7 +268,6 @@ elif [ "$1" = "update" ]; then
         return 404;
 	}
     }" > /etc/nginx/sites-enabled/$domain_name.conf
-
 else
     echo "Invalid mode. Use 'setup' or 'update'"
     echo "Usage: $0 {setup|update} [domain_name|old_domain] [ip|new_domain]"
