@@ -132,13 +132,30 @@ if [ "$1" = "setup" ]; then
     sudo mkdir -p /etc/opendkim/keys
     sudo chown -R opendkim:opendkim /etc/opendkim
     sudo chmod 744 /etc/opendkim/keys
-    sudo mkdir /etc/opendkim/keys/$dommain_name
-    sudo opendkim-genkey -b 2048 -d $dommain_name -D /etc/opendkim/keys/$dommain_name -s default -v
-    sudo chown opendkim:opendkim /etc/opendkim/keys/$dommain_name/default.private
-    private=$(sudo cat /etc/opendkim/keys/$nom_de_domaine/default.txt)
+    sudo mkdir /etc/opendkim/keys/$domain_name
+    sudo opendkim-genkey -b 2048 -d $domain_name -D /etc/opendkim/keys/$domain_name -s default -v
+    sudo chown opendkim:opendkim /etc/opendkim/keys/$domain_name/default.private
+    private=$(sudo cat /etc/opendkim/keys/$domain_name/default.txt)
     echo "The private key for DKIM is :
     \$private
     "
+
+    echo "
+    *@$domain_name    default._domainkey.$domain_name
+    *@*.$domain_name    default._domainkey.$domain_name
+    " > /etc/opendkim/signing.table
+
+    echo "
+    default._domainkey.$domain_name     $domain_name:default:/etc/opendkim/keys/$domain_name/default.private
+    " > /etc/opendkim/key.table
+
+    echo "
+    127.0.0.1
+    $domain_name
+    localhost
+    " > /etc/opendkim/signing.table
+    
+    sudo systemctl restart opendkim
 
     # Configurer the nginx
     sudo apt-get -y install nginx
@@ -219,13 +236,17 @@ elif [ "$1" = "update" ]; then
     }" > /opt/gophish/config.json
 
     # Modify the DKIM
-    sudo mkdir /etc/opendkim/keys/$dommain_name
-    sudo opendkim-genkey -b 2048 -d $dommain_name -D /etc/opendkim/keys/$dommain_name -s default -v
-    sudo chown opendkim:opendkim /etc/opendkim/keys/$dommain_name/default.private
-    private=$(sudo cat /etc/opendkim/keys/$nom_de_domaine/default.txt)
+    sudo mkdir /etc/opendkim/keys/$domain_name
+    sudo opendkim-genkey -b 2048 -d $domain_name -D /etc/opendkim/keys/$domain_name -s default -v
+    sudo chown opendkim:opendkim /etc/opendkim/keys/$domain_name/default.private
+    private=$(sudo cat /etc/opendkim/keys/$domain_name/default.txt)
     echo "The private key for DKIM is :
     \$private
     "
+    sudo sed -i "s/$old_domain/$domain_name/g" /etc/opendkim/signing.table
+    sudo sed -i "s/$old_domain/$domain_name/g" /etc/opendkim/key.table
+    sudo sed -i "s/$old_domain/$domain_name/g" /etc/opendkim/signing.table
+    sudo systemctl restart opendkim
 
     # Modify the nginx conf
 
