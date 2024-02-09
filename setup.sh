@@ -41,12 +41,12 @@
         # Install go
         VERSION=$(curl -s https://go.dev/dl/?mode=json | jq -r '.[0].version')
         sudo wget https://go.dev/dl/$VERSION.linux-amd64.tar.gz
-        sudo rm -rf /usr/local/go && tar -C /usr/local -xzf $VERSION.linux-amd64.tar.gz
+        sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf $VERSION.linux-amd64.tar.gz
         echo "export PATH=/usr/local/go/bin:${PATH}" | sudo tee /etc/profile.d/go.sh
-        sudo source /etc/profile.d/go.sh
+        sudo sh /etc/profile.d/go.sh
 
-        installPath=/opt/stealthy-gophish
-        cd /opt/
+        installPath=/home/$USER
+        cd $installPath
 
         # Install gophish
         git clone https://github.com/Foulbazar/stealthy-gophish.git
@@ -54,12 +54,13 @@
 
         # We regenerate a rid
         # rid=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 7 | head -n 1)
-        # sed -i '' "s/const RecipientParameter = \"rid\"/const RecipientParameter = \"$rid\"/g" /opt/stealthy-gophish/models/campaign.go          Pas besoin car déjà changer
+        # sed -i '' "s/const RecipientParameter = \"rid\"/const RecipientParameter = \"$rid\"/g" $installPath/stealthy-gophish/models/campaign.go          Pas besoin car déjà changer
         go build
-        # sed -i 's!127.0.0.1!0.0.0.0!g' /opt/stealthy-gophish/config.json
+        # sed -i 's!127.0.0.1!0.0.0.0!g' $installPath/stealthy-gophish/config.json
 
         # Automate the launch of the service
-        sudo echo "
+        sudo touch /etc/systemd/system/gophish.service # problem ici
+        sudo sh -c "echo '
             [Unit]
             Description=Gophish Server
             After=network.target
@@ -67,20 +68,20 @@
             [Service]
             Type=simple
             User=$USER
-            WorkingDirectory=/opt/stealthy-gophish
-            ExecStart=/opt/stealthy-gophish/gophish
+            WorkingDirectory=$installPath
+            ExecStart=$installPath/stealthy-gophish/gophish
             [Install]
             WantedBy=multi-user.target
-        " > /etc/systemd/system/gophish.service
+        ' > /etc/systemd/system/gophish.service"   # Permision denied
         systemctl daemon-reload
         systemctl start gophish
         systemctl start gophish.service
         systemctl status gophish.service            # PB EGALEMENT ICI SErvIce PAS LANCER
 
         # Add the domain name 
-        hostname $domain_name 
-        echo "$domain_name" > /etc/hostname  
-        echo "127.0.1.1 $domain_name" >> /etc/hosts
+        hostname $domain_name
+        sudo sh -c "echo '$domain_name' > /etc/hostname" 
+        sudo sh -c "echo '127.0.1.1 $domain_name' >> /etc/hosts"
 
         # Change the hostname
         hostnamectl set-hostname $domain_name
@@ -102,8 +103,7 @@
         # Configure Certificate
         sudo snap install --classic certbot
         sudo ln -s /snap/bin/certbot /usr/bin/certbot
-        sudo certbot certonly --standalone -d $domain_name --agree-tos 
-        sudo adduser $USER
+        sudo certbot certonly --standalone -d $domain_name --agree-tos #  Problem ici
         sudo chgrp -R $GROUP /etc/letsencrypt/
         sudo chmod -R g+rx /etc/letsencrypt/
         sudo cat /etc/letsencrypt/live/$domain_name/fullchain.pem  
@@ -129,7 +129,7 @@
             \"logging\": {
                     \"filename\": \"\"
             }
-        }" > $installPath/config.json
+        }" > $installPath/stealthy-gophish/config.json
 
         # Configure DKIM
         sudo mkdir -p /etc/opendkim/keys
@@ -143,26 +143,26 @@
         $private
         "
 
-        echo "
+        sudo sh -c "echo '
         *@$domain_name    default._domainkey.$domain_name
         *@*.$domain_name    default._domainkey.$domain_name
-        " > /etc/opendkim/signing.table
+        ' > /etc/opendkim/signing.table" # Permision denied
 
-        echo "
+        sudo sh -c "echo '
         default._domainkey.$domain_name     $domain_name:default:/etc/opendkim/keys/$domain_name/default.private
-        " > /etc/opendkim/key.table
+        ' > /etc/opendkim/key.table" # Permision denied
 
-        echo "
+        sudo sh -c "echo '
         127.0.0.1
         $domain_name
         localhost
-        " > /etc/opendkim/signing.table
+        ' > /etc/opendkim/signing.table" # Permision denied
         
         sudo systemctl restart opendkim
 
         # Configurer the nginx
         sudo apt-get -y install nginx   ## PLEIN DE SOUCIS A VOIR
-        echo "
+        sudo sh -c "echo '
         server {
             listen 443 ssl;
             listen [::]:443;
@@ -176,7 +176,7 @@
         if ($http_user_agent = \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36\"){
             return 404;
         }
-        }" > /etc/nginx/sites-enabled/$domain_name.conf
+        }' > /etc/nginx/sites-enabled/$domain_name.conf" # Permision denied
 
         sudo service nginx reload
         sudo certbot --nginx -d $domain_name
@@ -198,8 +198,9 @@
 
         # Add the domain name 
         hostname $domain_name 
-        echo "$domain_name" > /etc/hostname  
-        echo "127.0.1.1 $domain_name" >> /etc/hosts
+        sudo sh -c "echo '$domain_name' > /etc/hostname"
+        sudo sed -i "s/$old_domain/$domain_name/g" /etc/hosts
+        
 
         # Change the hostname
         hostnamectl set-hostname $domain_name
@@ -237,7 +238,7 @@
             \"logging\": {
                     \"filename\": \"\"
             }
-        }" > /opt/stealthy-gophish/config.json
+        }" > $installPath/stealthy-gophish/config.json
 
         # Modify the DKIM
         sudo mkdir /etc/opendkim/keys/$domain_name
