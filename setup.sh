@@ -36,7 +36,7 @@
         sudo ufw allow from $IP to any port 3333
         sudo ufw allow 443
         sudo ufw allow 80
-        
+        sudo ufw enable
 
         # Install go
         VERSION=$(curl -s https://go.dev/dl/?mode=json | jq -r '.[0].version')
@@ -60,23 +60,29 @@
 
         # Automate the launch of the service
         sudo touch /etc/systemd/system/gophish.service # problem ici
-        sudo sh -c "echo '
-            [Unit]
-            Description=Gophish Server
-            After=network.target
-            StartLimitIntervalSec=0 
-            [Service]
-            Type=simple
-            User=$USER
-            WorkingDirectory=$installPath
-            ExecStart=$installPath/stealthy-gophish/gophish
-            [Install]
-            WantedBy=multi-user.target
-        ' > /etc/systemd/system/gophish.service"   # Permision denied
-        systemctl daemon-reload
-        systemctl start gophish
-        systemctl start gophish.service
-        systemctl status gophish.service            # PB EGALEMENT ICI SErvIce PAS LANCER
+        sudo sh -c "echo '[Unit]
+        Description=Gophish Server
+        After=network.target
+        StartLimitIntervalSec=0 
+        [Service]
+        Type=simple
+        User=$USER
+        WorkingDirectory=$installPath
+        ExecStart=$installPath/stealthy-gophish/gophish
+        [Install]
+        WantedBy=multi-user.target' > /etc/systemd/system/gophish.service"  
+        
+
+        # Configure Certificate
+        sudo snap install --classic certbot
+        sudo apt -y install python3-certbot-nginx
+        sudo ln -s /snap/bin/certbot /usr/bin/certbot
+        sudo certbot certonly --standalone -d $domain_name --register-unsafely-without-email --agree-tos 
+        sudo certbot certonly -d passwordupdate.support --manual --preferred-challenges dns
+        # Verify
+        sudo chgrp -R $GROUP /etc/letsencrypt/
+        sudo chmod -R g+rx /etc/letsencrypt/
+        sudo cat /etc/letsencrypt/live/$domain_name/fullchain.pem  
 
         # Add the domain name 
         hostname $domain_name
@@ -91,22 +97,43 @@
 
         # Install postfix
         sudo apt-get install -y postfix
+
+        # Modifier le fichier /etc/postfix/main.cf
+        sudo sh -c "echo 'smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+        biff = no
+        append_dot_mydomain = no
+        readme_directory = no
+        smtpd_tls_cert_file=/etc/letsencrypt/live/$domain_name/fullchain.pem
+        smtpd_tls_key_file=/etc/letsencrypt/live/$domain_nam/privkey.pem
+        smtpd_tls_security_level = may
+        smtp_tls_security_level = encrypt
+        smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
+        smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+        smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+        myhostname = \${primary_domain}
+        alias_maps = hash:/etc/aliases
+        alias_database = hash:/etc/aliases
+        myorigin = /etc/mailname
+        mydestination = \${primary_domain}, localhost.com, , localhost
+        relayhost =
+        mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 \${relay_ip}
+        mailbox_command = procmail -a "\$EXTENSION"
+        mailbox_size_limit = 0
+        recipient_delimiter = +
+        inet_interfaces = all
+        inet_protocols = ipv4
+        milter_default_action = accept
+        milter_protocol = 6
+        smtpd_milters = inet:12301,inet:localhost:54321
+        non_smtpd_milters = inet:12301,inet:localhost:54321' > /etc/postfix/main.cf"
         cat /etc/postfix/main.cf
 
         # Modify the config files /etc/postfix/generic
         current_domain=$(grep '^myhostname' /etc/postfix/main.cf | awk '{ print $2 }')
-        sudo sed -i "s/$current_domain/$domain_name/g" /etc/postfix/generic            #MARCHE PAS
+        #sudo sed -i "s/$current_domain/$domain_name/g" /etc/postfix/generic            #MARCHE PAS
 
         # Modify the /etc/postfix/main.cf file
         sudo sed -i "s/$current_domain/$domain_name/g" /etc/postfix/main.cf
-
-        # Configure Certificate
-        sudo snap install --classic certbot
-        sudo ln -s /snap/bin/certbot /usr/bin/certbot
-        sudo certbot certonly --standalone -d $domain_name --agree-tos #  Problem ici
-        sudo chgrp -R $GROUP /etc/letsencrypt/
-        sudo chmod -R g+rx /etc/letsencrypt/
-        sudo cat /etc/letsencrypt/live/$domain_name/fullchain.pem  
 
         # Create config
         echo "{
@@ -143,50 +170,58 @@
         $private
         "
 
-        sudo sh -c "echo '
-        *@$domain_name    default._domainkey.$domain_name
-        *@*.$domain_name    default._domainkey.$domain_name
-        ' > /etc/opendkim/signing.table" # Permision denied
+        sudo sh -c "echo '*@$domain_name    default._domainkey.$domain_name
+        *@*.$domain_name    default._domainkey.$domain_name' > /etc/opendkim/signing.table"
 
-        sudo sh -c "echo '
-        default._domainkey.$domain_name     $domain_name:default:/etc/opendkim/keys/$domain_name/default.private
-        ' > /etc/opendkim/key.table" # Permision denied
+        sudo sh -c "echo 'default._domainkey.$domain_name     $domain_name:default:/etc/opendkim/keys/$domain_name/default.private' > /etc/opendkim/key.table"
 
-        sudo sh -c "echo '
-        127.0.0.1
+        sudo sh -c "echo '127.0.0.1
         $domain_name
-        localhost
-        ' > /etc/opendkim/signing.table" # Permision denied
+        localhost' > /etc/opendkim/signing.table"
         
         sudo systemctl restart opendkim
 
         # Configurer the nginx
         sudo apt-get -y install nginx   ## PLEIN DE SOUCIS A VOIR
-        sudo sh -c "echo '
-        server {
+        sudo sh -c "echo 'server {
             listen 443 ssl;
             listen [::]:443;
-            server_name    $domain_name ;
-            add_header X-Robots-Tag "noindex, nofollow, nosnippet, noarchive";
+            server_name    $domain_name;
 
-        if ($http_user_agent ~* (google) ) {
+            #Add a blocklist
+            include /etc/nginx/cond.d/blocklist.conf;
+
+            # Add the SSL certificate and key directives
+            ssl_certificate /etc/letsencrypt/live/$domain_name/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/$domain_name/privkey.pem;
+            #Add header
+            add_header X-Robots-Tag \"noindex, nofollow, nosnippet, noarchive\";
+
+        if (\$http_user_agent ~* (google) ) {
             return 404;
         }
-    
-        if ($http_user_agent = \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36\"){
+
+        if (\$http_user_agent = \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36\"){
             return 404;
+        }
+
+        location = /robots.txt {
+            add_header Content-Type text/plain;
+            return 200 \"User-agent: *\nDisallow: / \";
         }
         }' > /etc/nginx/sites-enabled/$domain_name.conf" # Permision denied
-
-        sudo service nginx reload
-        sudo certbot --nginx -d $domain_name
+        
+        #sudo certbot --nginx -d $domain_name
         sudo service nginx reload
 
         # Restart the services 
+        sudo systemctl start gophish
+        sudo systemctl start gophish.service
+        sudo systemctl status gophish.service            # PB EGALEMENT ICI SErvIce PAS LANCER
+        sudo systemctl daemon-reload #marche pas access denied
         sudo systemctl restart gophish.service
         sudo /usr/sbin/postmap /etc/postfix/generic 
         sudo service postfix restart
-        sudo ufw enable
 
     elif [ "$1" = "update" ]; then
         MODE="update"
@@ -214,6 +249,9 @@
         # Modify the /etc/postfix/main.cf file
         sudo sed -i "s/$old_domain/$domain_name/g" /etc/postfix/main.cf
         
+        # Delete old certificate:
+        sudo certbot delete --cert-name $old_domain
+
         # Generate the certificate
         sudo certbot certonly --standalone -d $domain_name --agree-tos
 
